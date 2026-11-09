@@ -150,7 +150,7 @@ class UI:
     @staticmethod
     def kind(s):
         full = s['text'].lower()
-        if NO_OFFER.lower() in full or ('selling price' in full and 'total amount' in full): return 'quote'
+        if NO_OFFER.lower() in full or ('selling price' in full and 'total amount' in full) or 'exact value' in full or 'get paid' in full: return 'quote'
         t = (s.get('panel') or s['text']).lower()
         if 'what is your mobile age?' in t: return 'age'
         if 'functional or physical problems' in t: return 'functional'
@@ -300,10 +300,16 @@ class UI:
             if discover: self.learn(schema, 'ages', ages)
             if ages != schema['ages']: raise ReviewRequired('Age bands changed.')
             wanted = case.get('age', ages[0])
-            # These cards submit immediately on click; verify exact labels before the one click.
+            # These cards submit immediately on click or have a Continue button
             index = ages.index(wanted)
             print(f"    [Browser] Selecting age band: {wanted}", flush=True)
-            await self.page.locator(self.rules.get('card_selector',CARDS)).nth(s['cards'][index]['index']).click()
+            card_locator = self.page.locator(self.rules.get('card_selector',CARDS)).nth(s['cards'][index]['index'])
+            await card_locator.click()
+            await asyncio.sleep(0.5)
+            # If Cashify requires clicking Continue after age selection
+            cont_btn = self.page.get_by_role('button', name='Continue', exact=True)
+            if await cont_btn.count() and await cont_btn.is_visible():
+                await cont_btn.click()
             answer_log.append(dict(stage='age', options=ages, selected=[wanted], verified=True,
                                    verification='Exact observed card clicked; quote transition verified.'))
             s = await self.wait({'quote'})
