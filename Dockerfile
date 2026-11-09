@@ -1,5 +1,5 @@
-# Official Microsoft Playwright image with all browser binaries & OS dependencies pre-installed
-FROM mcr.microsoft.com/playwright/python:v1.48.0-noble
+# Official Microsoft Playwright image with latest browser binaries
+FROM mcr.microsoft.com/playwright/python:v1.50.0-noble
 
 # Prevent python from buffering stdout/stderr
 ENV PYTHONUNBUFFERED=1
@@ -11,9 +11,9 @@ WORKDIR /app
 # Copy dependency definition
 COPY requirements.txt .
 
-# Install dependencies matching Playwright base image
-RUN pip install --no-cache-dir -r requirements.txt
-RUN playwright install chromium
+# Install dependencies and update browser binaries
+RUN pip install --no-cache-dir -r requirements.txt && \
+    python -m playwright install --with-deps chromium
 
 # Copy all application code
 COPY . .
