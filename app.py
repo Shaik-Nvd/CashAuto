@@ -23,9 +23,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import tempfile
+
 BASE_DIR = Path(__file__).resolve().parent
-RUNS_DIR = BASE_DIR / "runs"
-RUNS_DIR.mkdir(parents=True, exist_ok=True)
+# On serverless platforms like Vercel, root filesystem is read-only.
+try:
+    RUNS_DIR = BASE_DIR / "runs"
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+except (OSError, PermissionError):
+    RUNS_DIR = Path(tempfile.gettempdir()) / "cashauto_runs"
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+
 WEB_DIR = BASE_DIR / "web"
 
 # Active execution process tracker
