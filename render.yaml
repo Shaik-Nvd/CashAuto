@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: cashauto
+    runtime: docker
+    plan: free
+    region: oregon
+    envVars:
+      - key: HEADLESS
+        value: "true"
+      - key: PORT
+        value: "8000"
+    autoDeploy: true

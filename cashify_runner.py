@@ -519,9 +519,10 @@ async def run_batch(urls, args):
     urls=[validate_url(u) for u in urls]
     summary=[]
     async with async_playwright() as pw:
+        headless_mode = os.environ.get("HEADLESS", "false").lower() in ("true", "1", "yes")
         async def launch():
             context=await pw.chromium.launch_persistent_context(str(Path(args.profile).resolve()),
-                        headless=False,viewport=dict(width=1440,height=1000))
+                        headless=headless_mode,viewport=dict(width=1440,height=1000))
             context.set_default_timeout(args.timeout*1000)
             return context
         context=await launch()
