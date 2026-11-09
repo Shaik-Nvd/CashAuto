@@ -5,6 +5,7 @@ import sys
 import json
 import signal
 import subprocess
+import time
 from pathlib import Path
 from typing import List, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, BackgroundTasks
@@ -26,13 +27,30 @@ app.add_middleware(
 import tempfile
 
 BASE_DIR = Path(__file__).resolve().parent
-# On serverless platforms like Vercel, root filesystem is read-only.
+# Persistent runs storage (stored for 30 days)
 try:
     RUNS_DIR = BASE_DIR / "runs"
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
 except (OSError, PermissionError):
     RUNS_DIR = Path(tempfile.gettempdir()) / "cashauto_runs"
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
+
+# 30-day retention cleanup routine (2592000 seconds = 30 days)
+RETENTION_PERIOD_SECONDS = 30 * 24 * 60 * 60
+
+def cleanup_expired_runs():
+    """Retains files on the server for 30 days (1 month), removing only those older than 30 days."""
+    try:
+        now = time.time()
+        if RUNS_DIR.exists():
+            for item in RUNS_DIR.iterdir():
+                if item.is_dir():
+                    mtime = item.stat().st_mtime
+                    if now - mtime > RETENTION_PERIOD_SECONDS:
+                        import shutil
+                        shutil.rmtree(item, ignore_errors=True)
+    except Exception as e:
+        print(f"Error during retention cleanup: {e}")
 
 WEB_DIR = BASE_DIR / "web"
 
@@ -188,6 +206,7 @@ async def stop_run():
 
 @app.get("/api/runs")
 async def list_runs():
+    cleanup_expired_runs()
     if not RUNS_DIR.exists():
         return []
     runs = []
