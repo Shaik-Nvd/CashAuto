@@ -307,6 +307,7 @@ class UI:
         return dict(case=case, quote=quote, answers=answer_log, observed_at=utcnow(), quote_text=s['text'])
 
 async def variants(page, url, timeout):
+    print(f"Opening model page: {url}", flush=True)
     await page.goto(url, wait_until='domcontentloaded')
     await page.get_by_role('heading',level=1).wait_for(timeout=timeout*1000)
     # If a variant URL was pasted, its breadcrumb exposes the model-level page.
@@ -316,6 +317,7 @@ async def variants(page, url, timeout):
         parent = next((a['href'] for a in reversed(breadcrumbs)
                        if '/sell-old-mobile-phone/used-' in a['href'] and a['href']!=page.url), None)
         if parent:
+            print(f"Navigating to parent model page: {parent}", flush=True)
             await page.goto(parent, wait_until='domcontentloaded')
             await page.get_by_role('heading',level=1).wait_for()
     if await page.get_by_text('Choose a variant', exact=True).count():
@@ -324,10 +326,13 @@ async def variants(page, url, timeout):
         links = [a for a in links if re.fullmatch(r'(?:\d+\s*GB\s*/\s*)?\d+\s*(?:GB|TB)', a['label'],re.I)
                  and '/sell-old-mobile-phone/used-' in a['url']]
         if not links: raise ReviewRequired('Variant list found but no recognized variant links.')
-        return list({a['url']:a for a in links}.values())
+        found = list({a['url']:a for a in links}.values())
+        print(f"Discovered {len(found)} storage/RAM variant(s).", flush=True)
+        return found
     return [dict(url=page.url,label=(await page.get_by_role('heading',level=1).inner_text()))]
 
 async def calculator(page, variant_url, timeout):
+    print(f"Transitioning variant to calculator: {variant_url}", flush=True)
     await page.goto(variant_url, wait_until='domcontentloaded')
     await page.get_by_role('button',name='Get Exact Value',exact=True).click()
     try:
@@ -335,6 +340,9 @@ async def calculator(page, variant_url, timeout):
     except Exception:
         text = await page.locator('body').inner_text()
         if re.search(r'otp|mobile number|log.?in', text,re.I):
+            print("Notice: Cashify login / OTP modal detected.", flush=True)
+            if os.environ.get("HEADLESS", "false").lower() in ("true", "1", "yes"):
+                raise ReviewRequired("Cashify sign-in required (OTP/Phone modal appeared). Login must be performed in interactive mode.")
             await asyncio.to_thread(input,'Complete Cashify sign-in in the opened browser, then press Enter here: ')
             button=page.get_by_role('button',name='Get Exact Value',exact=True)
             if await button.count(): await button.click()
@@ -342,6 +350,7 @@ async def calculator(page, variant_url, timeout):
         else: raise
     model = parse_qs(urlparse(page.url).query).get('pn',[None])[0]
     if not model: raise ReviewRequired('Calculator URL has no explicit model/variant identity.')
+    print(f"Successfully loaded calculator for model: {model}", flush=True)
     return dict(url=variant_url,start=page.url,model=model)
 
 def export(out, state):
