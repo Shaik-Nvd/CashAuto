@@ -599,6 +599,26 @@
         };
       };
 
+      // Fallback Polling in case WebSocket is reconnecting
+      setInterval(async () => {
+        try {
+          const res = await fetch('/api/status');
+          if (res.ok) {
+            const st = await res.json();
+            isRunning.value = st.is_running;
+          }
+          if (logs.value.length === 0) {
+            const logRes = await fetch('/api/logs');
+            if (logRes.ok) {
+              const logData = await logRes.json();
+              if (logData.logs && logData.logs.length > 0) {
+                logs.value = [...logData.logs];
+              }
+            }
+          }
+        } catch(e) {}
+      }, 2000);
+
       const startAutomation = async () => {
         startError.value = '';
         if (parsedUrls.value.length === 0) {

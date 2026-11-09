@@ -11,8 +11,9 @@ WORKDIR /app
 # Copy dependency definition
 COPY requirements.txt .
 
-# Install dependencies including fastapi and uvicorn
+# Install dependencies matching Playwright base image
 RUN pip install --no-cache-dir -r requirements.txt
+RUN playwright install chromium
 
 # Copy all application code
 COPY . .
