@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CashAuto - Cashify Automation Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+            },
+            darkbg: '#0f172a',
+            darkpanel: '#1e293b',
+            darkborder: '#334155'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    .log-stream {
+      scroll-behavior: smooth;
+    }
+  </style>
+</head>
+<body class="bg-[#0b1120] text-slate-100 min-h-screen flex flex-col antialiased selection:bg-emerald-500 selection:text-white">
+
+<div id="app" class="flex flex-col min-h-screen">
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-slate-800 bg-[#0f172a]/80 backdrop-blur sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+        <i data-lucide="zap" class="w-5 h-5 text-white"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="font-bold text-lg tracking-tight text-white">CashAuto</h1>
+          <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">v1.1.2</span>
+        </div>
+        <p class="text-xs text-slate-400">Cashify Device Quote Automation & Testing Suite</p>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs & Status -->
+    <div class="flex items-center gap-6">
+      <nav class="flex items-center gap-1 bg-slate-900/60 p-1 rounded-lg border border-slate-800">
+        <button 
+          v-for="tab in tabs" 
+          :key="tab.id"
+          @click="activeTab = tab.id"
+          :class="activeTab === tab.id ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+          class="flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-semibold transition"
+        >
+          <i :data-lucide="tab.icon" class="w-4 h-4"></i>
+          {{ tab.name }}
+          <span v-if="tab.badge" class="ml-1 px-1.5 py-0.2 bg-emerald-500/20 text-emerald-400 text-[10px] rounded-full">{{ tab.badge }}</span>
+        </button>
+      </nav>
+
+      <!-- Connection / Status Indicator -->
+      <div class="flex items-center gap-2.5 text-xs bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg">
+        <span class="relative flex h-2.5 w-2.5">
+          <span v-if="isRunning" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+          <span :class="isRunning ? 'bg-emerald-500' : (wsConnected ? 'bg-blue-500' : 'bg-red-500')" class="relative inline-flex rounded-full h-2.5 w-2.5"></span>
+        </span>
+        <span class="text-slate-300 font-medium">{{ isRunning ? 'Automation Active' : (wsConnected ? 'System Ready' : 'Disconnected') }}</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-6 flex flex-col gap-6">
+
+    <!-- TAB 1: RUNNER / DASHBOARD -->
+    <div v-show="activeTab === 'runner'" class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      
+      <!-- Left Column: URL Inputs & Runner Controls (5 cols) -->
+      <div class="lg:col-span-5 flex flex-col gap-5">
+        
+        <!-- URL Queue Input Card -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <i data-lucide="smartphone" class="w-4 h-4 text-emerald-400"></i>
+              <h2 class="font-semibold text-sm text-slate-200">Device Queue</h2>
+            </div>
+            <span class="text-xs text-slate-400 font-mono">{{ parsedUrls.length }} queued</span>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-400 mb-1.5">
+              Cashify Device Sell URLs <span class="text-slate-500">(One per line)</span>
+            </label>
+            <textarea 
+              v-model="urlsText" 
+              placeholder="https://www.cashify.in/sell-old-mobile-phone/used-Samsung-Galaxy-s9-plus&#10;https://www.cashify.in/sell-old-mobile-phone/used-apple-iphone-13" 
+              rows="6"
+              class="w-full bg-slate-950/70 border border-slate-800 rounded-xl p-3 text-xs text-slate-100 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/60 font-mono resize-none transition"
+            ></textarea>
+          </div>
+
+          <!-- Quick Templates / Help -->
+          <div class="flex items-center justify-between text-xs">
+            <button @click="insertExampleUrl" class="text-emerald-400 hover:text-emerald-300 transition text-[11px] flex items-center gap-1">
+              <i data-lucide="plus-circle" class="w-3 h-3"></i> Insert Sample URL
+            </button>
+            <button @click="urlsText = ''" class="text-slate-500 hover:text-slate-400 transition text-[11px]">
+              Clear Input
+            </button>
+          </div>
+
+          <!-- Parsed URL List Preview -->
+          <div v-if="parsedUrls.length > 0" class="flex flex-col gap-1.5 max-h-40 overflow-y-auto pr-1">
+            <div 
+              v-for="(u, idx) in parsedUrls" 
+              :key="idx" 
+              class="flex items-center justify-between bg-slate-950/40 border border-slate-800/80 px-2.5 py-1.5 rounded-lg text-xs"
+            >
+              <div class="flex items-center gap-2 truncate mr-2">
+                <span class="text-slate-500 font-mono text-[10px]">#{{ idx + 1 }}</span>
+                <span class="truncate text-slate-300 font-mono text-[11px]">{{ cleanSlug(u) }}</span>
+              </div>
+              <span v-if="hasDuplicate(u, idx)" class="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 rounded">duplicate</span>
+            </div>
+          </div>
+
+          <!-- Settings Collapsible -->
+          <div class="border border-slate-800/80 rounded-xl bg-slate-950/30 overflow-hidden">
+            <button 
+              @click="showAdvanced = !showAdvanced" 
+              class="w-full px-3.5 py-2 flex items-center justify-between text-xs text-slate-400 hover:text-slate-200 transition"
+            >
+              <span class="flex items-center gap-1.5 font-medium">
+                <i data-lucide="sliders" class="w-3.5 h-3.5"></i> Execution Settings
+              </span>
+              <i :data-lucide="showAdvanced ? 'chevron-up' : 'chevron-down'" class="w-4 h-4"></i>
+            </button>
+
+            <div v-show="showAdvanced" class="p-3.5 border-t border-slate-800 flex flex-col gap-3 text-xs bg-slate-950/60">
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-slate-400 block mb-1">Timeout (seconds)</label>
+                  <input type="number" v-model.number="config.timeout" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200">
+                </div>
+                <div>
+                  <label class="text-slate-400 block mb-1">Transient Retries</label>
+                  <input type="number" v-model.number="config.retries" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200">
+                </div>
+              </div>
+              <div>
+                <label class="text-slate-400 block mb-1">Browser Profile Directory</label>
+                <input type="text" v-model="config.profile" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-[11px]">
+              </div>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex items-center gap-3 pt-2">
+            <button 
+              v-if="!isRunning"
+              @click="startAutomation" 
+              :disabled="parsedUrls.length === 0"
+              class="flex-1 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg shadow-emerald-500/20 text-xs flex items-center justify-center gap-2 transition"
+            >
+              <i data-lucide="play" class="w-4 h-4 fill-white"></i>
+              Start Automation
+            </button>
+
+            <button 
+              v-else
+              @click="stopAutomation" 
+              class="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg shadow-red-600/20 text-xs flex items-center justify-center gap-2 transition"
+            >
+              <i data-lucide="square" class="w-4 h-4 fill-white"></i>
+              Stop Execution
+            </button>
+          </div>
+
+          <p v-if="startError" class="text-xs text-red-400 bg-red-950/40 border border-red-900/50 p-2.5 rounded-lg">
+            {{ startError }}
+          </p>
+        </div>
+
+        <!-- Quick Summary Box -->
+        <div class="bg-slate-900/40 border border-slate-800/80 rounded-xl p-4 text-xs text-slate-400 flex flex-col gap-2">
+          <div class="flex items-center gap-2 text-slate-300 font-medium">
+            <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+            Non-Destructive Safe Automation
+          </div>
+          <p class="text-[11px] leading-relaxed text-slate-400">
+            CashAuto performs exhaustive single-defect valuation tests (screen cracks, functional defects, missing accessories). It navigates the visible UI and <strong>never finalizes or books any sales</strong>.
+          </p>
+        </div>
+
+      </div>
+
+      <!-- Right Column: Live Terminal & Streaming Logs (7 cols) -->
+      <div class="lg:col-span-7 flex flex-col gap-4">
+        
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl shadow-xl flex flex-col overflow-hidden h-[620px]">
+          
+          <!-- Terminal Header -->
+          <div class="bg-slate-950/80 border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded-full bg-red-500/80 inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-amber-500/80 inline-block"></span>
+                <span class="w-3 h-3 rounded-full bg-emerald-500/80 inline-block"></span>
+              </div>
+              <span class="text-xs font-mono text-slate-400 font-medium ml-2 flex items-center gap-1.5">
+                <i data-lucide="terminal" class="w-3.5 h-3.5 text-slate-400"></i> Live Console Stream
+              </span>
+            </div>
+
+            <div class="flex items-center gap-2">
+              <button 
+                @click="autoScroll = !autoScroll" 
+                :class="autoScroll ? 'text-emerald-400 bg-emerald-500/10' : 'text-slate-500 bg-slate-800/50'"
+                class="text-[10px] px-2 py-0.5 rounded border border-slate-700/50 flex items-center gap-1 font-mono transition"
+              >
+                Auto-scroll: {{ autoScroll ? 'ON' : 'OFF' }}
+              </button>
+              <button 
+                @click="clearLogs" 
+                class="text-[10px] text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 transition"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <!-- Terminal Output Area -->
+          <div 
+            ref="terminalContainer" 
+            class="flex-1 bg-slate-950 p-4 font-mono text-xs overflow-y-auto log-stream text-slate-300 leading-relaxed whitespace-pre-wrap select-text"
+          >
+            <div v-if="logs.length === 0" class="h-full flex flex-col items-center justify-center text-slate-600 gap-2">
+              <i data-lucide="command" class="w-8 h-8 opacity-40"></i>
+              <span>Console output is empty. Start a run or select past runs.</span>
+            </div>
+            <div v-for="(log, idx) in logs" :key="idx" :class="getLogClass(log)">{{ log }}</div>
+          </div>
+
+          <!-- Terminal Footer Status -->
+          <div class="bg-slate-950/90 border-t border-slate-800/80 px-4 py-2 flex items-center justify-between text-[11px] text-slate-400 font-mono">
+            <span>{{ isRunning ? '⚡ Running Playwright Engine...' : 'Idle' }}</span>
+            <span>Lines: {{ logs.length }}</span>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- TAB 2: AUDIT RUNS & RESULTS -->
+    <div v-show="activeTab === 'results'" class="flex flex-col gap-6">
+      
+      <!-- Runs List Top Bar -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-semibold text-slate-100">Audit Reports & Generated Runs</h2>
+          <p class="text-xs text-slate-400">All completed and in-progress inspection runs saved under <code class="text-emerald-400">runs/</code></p>
+        </div>
+        <button 
+          @click="fetchRuns" 
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition font-medium"
+        >
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="{'animate-spin': loadingRuns}"></i> Refresh
+        </button>
+      </div>
+
+      <!-- Runs Table -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        <div v-if="runs.length === 0" class="p-12 text-center text-slate-500 flex flex-col items-center gap-3">
+          <i data-lucide="folder-archive" class="w-10 h-10 opacity-30"></i>
+          <p class="text-sm">No inspection runs found yet.</p>
+          <span class="text-xs text-slate-600">Start an audit run from the Dashboard to see results here.</span>
+        </div>
+
+        <table v-else class="w-full text-left text-xs border-collapse">
+          <thead>
+            <tr class="border-b border-slate-800 bg-slate-950/50 text-slate-400 font-medium">
+              <th class="py-3 px-4">Device Model / Slug</th>
+              <th class="py-3 px-4">Variants</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4">Files / Artifacts</th>
+              <th class="py-3 px-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800/60 font-normal">
+            <tr v-for="r in runs" :key="r.name" class="hover:bg-slate-800/30 transition">
+              <td class="py-3.5 px-4">
+                <div class="font-medium text-slate-200">{{ formatRunName(r.name) }}</div>
+                <div class="text-[11px] text-slate-500 font-mono truncate max-w-sm">{{ r.name }}</div>
+              </td>
+              <td class="py-3.5 px-4 font-mono text-slate-300">
+                <span v-if="r.variants_count" class="px-2 py-0.5 rounded bg-slate-800 text-emerald-400 font-semibold text-[11px]">
+                  {{ r.variants_count }} variant(s)
+                </span>
+                <span v-else class="text-slate-600">—</span>
+              </td>
+              <td class="py-3.5 px-4">
+                <span 
+                  v-if="r.status === 'done' || r.has_zip" 
+                  class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                >
+                  <i data-lucide="check-circle" class="w-3 h-3"></i> Completed
+                </span>
+                <span 
+                  v-else-if="r.has_checkpoint" 
+                  class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                >
+                  <i data-lucide="clock" class="w-3 h-3"></i> In Progress / Checkpointed
+                </span>
+                <span 
+                  v-else 
+                  class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-slate-800 text-slate-400"
+                >
+                  Incomplete
+                </span>
+              </td>
+              <td class="py-3.5 px-4">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span v-if="r.has_zip" class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-emerald-300 border border-emerald-500/20 font-mono">
+                    ZIP ({{ formatSize(r.zip_size) }})
+                  </span>
+                  <span v-if="r.has_checkpoint" class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-blue-300 border border-blue-500/20 font-mono">
+                    checkpoint.json
+                  </span>
+                  <span v-if="r.has_diagnostic" class="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-amber-300 border border-amber-500/20 font-mono">
+                    diagnostic.json
+                  </span>
+                </div>
+              </td>
+              <td class="py-3.5 px-4 text-right">
+                <div class="flex items-center justify-end gap-2">
+                  <button 
+                    @click="viewRunDetail(r.name)" 
+                    class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs transition"
+                  >
+                    Inspect
+                  </button>
+                  <a 
+                    v-if="r.has_zip"
+                    :href="`/api/download/${r.name}/Cashify_Test_Results.zip`" 
+                    download
+                    class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs flex items-center gap-1 transition"
+                  >
+                    <i data-lucide="download" class="w-3 h-3"></i> Download ZIP
+                  </a>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Detail Modal / Viewer -->
+      <div v-if="selectedRunDetail" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[85vh] flex flex-col shadow-2xl overflow-hidden">
+          <div class="px-6 py-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+            <div>
+              <h3 class="font-bold text-sm text-slate-100">{{ selectedRunDetail.name }}</h3>
+              <p class="text-xs text-slate-400">Detailed Checkpoint & Diagnostics Inspector</p>
+            </div>
+            <button @click="selectedRunDetail = null" class="text-slate-400 hover:text-white">
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+
+          <div class="p-6 overflow-y-auto space-y-4 text-xs font-mono">
+            <!-- Checkpoint Information -->
+            <div v-if="selectedRunDetail.checkpoint" class="space-y-2">
+              <div class="text-xs font-sans font-semibold text-emerald-400 flex items-center gap-1.5">
+                <i data-lucide="check" class="w-4 h-4"></i> Checkpoint Summary
+              </div>
+              <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 overflow-x-auto text-slate-300">
+                <div class="mb-2"><strong>Device URL:</strong> {{ selectedRunDetail.checkpoint.url }}</div>
+                <div class="mb-2"><strong>Status:</strong> {{ selectedRunDetail.checkpoint.status }}</div>
+                <div class="mb-2"><strong>Discovered Variants:</strong> {{ (selectedRunDetail.checkpoint.variants || []).length }}</div>
+                <div v-if="selectedRunDetail.checkpoint.variants">
+                  <div class="text-slate-400 mb-1">Variant List:</div>
+                  <ul class="list-disc pl-5 space-y-1">
+                    <li v-for="v in selectedRunDetail.checkpoint.variants" :key="v">{{ v }}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Diagnostics Information if present -->
+            <div v-if="selectedRunDetail.diagnostic" class="space-y-2">
+              <div class="text-xs font-sans font-semibold text-amber-400 flex items-center gap-1.5">
+                <i data-lucide="alert-triangle" class="w-4 h-4"></i> Diagnostic Information
+              </div>
+              <pre class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-slate-300 overflow-x-auto max-h-60">{{ JSON.stringify(selectedRunDetail.diagnostic, null, 2) }}</pre>
+            </div>
+
+            <!-- Files list -->
+            <div>
+              <div class="text-xs font-sans font-semibold text-slate-300 mb-2">Folder Files:</div>
+              <div class="flex gap-2 flex-wrap">
+                <a 
+                  v-for="file in selectedRunDetail.files" 
+                  :key="file"
+                  :href="`/api/download/${selectedRunDetail.name}/${file}`"
+                  download
+                  class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 border border-slate-700 flex items-center gap-1.5 text-xs font-sans"
+                >
+                  <i data-lucide="file" class="w-3.5 h-3.5"></i> {{ file }}
+                </a>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- TAB 3: RULES & CONFIGURATION -->
+    <div v-show="activeTab === 'rules'" class="flex flex-col gap-6 max-w-4xl mx-auto w-full">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl flex flex-col gap-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div>
+            <h2 class="text-base font-semibold text-slate-100 flex items-center gap-2">
+              <i data-lucide="file-code" class="w-5 h-5 text-emerald-400"></i> Rules Configuration (<code class="text-xs text-emerald-300">rules.json</code>)
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">Customize selector overrides or handle custom physical branch question blocks for special phone variants.</p>
+          </div>
+          <button 
+            @click="saveRules" 
+            :disabled="savingRules"
+            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 transition shadow-lg shadow-emerald-500/20"
+          >
+            <i data-lucide="save" class="w-4 h-4"></i> Save Rules
+          </button>
+        </div>
+
+        <div>
+          <textarea 
+            v-model="rulesJsonText" 
+            rows="18"
+            class="w-full bg-slate-950 font-mono text-xs text-slate-200 border border-slate-800 rounded-xl p-4 focus:outline-none focus:border-emerald-500 transition leading-relaxed"
+          ></textarea>
+        </div>
+
+        <p v-if="rulesMsg" class="text-xs" :class="rulesMsg.error ? 'text-red-400' : 'text-emerald-400'">
+          {{ rulesMsg.text }}
+        </p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  const { createApp, ref, computed, onMounted, nextTick } = Vue;
+
+  createApp({
+    setup() {
+      const activeTab = ref('runner');
+      const tabs = [
+        { id: 'runner', name: 'Automation Dashboard', icon: 'gauge' },
+        { id: 'results', name: 'Audits & Reports', icon: 'file-spreadsheet' },
+        { id: 'rules', name: 'Inspection Rules', icon: 'settings' }
+      ];
+
+      const urlsText = ref('');
+      const showAdvanced = ref(false);
+      const isRunning = ref(false);
+      const wsConnected = ref(false);
+      const autoScroll = ref(true);
+      const logs = ref([]);
+      const terminalContainer = ref(null);
+      const startError = ref('');
+
+      const config = ref({
+        timeout: 60,
+        retries: 1,
+        profile: '.cashify-browser'
+      });
+
+      const runs = ref([]);
+      const loadingRuns = ref(false);
+      const selectedRunDetail = ref(null);
+
+      const rulesJsonText = ref('{}');
+      const savingRules = ref(false);
+      const rulesMsg = ref(null);
+
+      let ws = null;
+
+      // Extract URLs from text
+      const parsedUrls = computed(() => {
+        return urlsText.value
+          .split('\n')
+          .map(u => u.trim())
+          .filter(u => u.length > 0 && !u.startsWith('#'));
+      });
+
+      const cleanSlug = (url) => {
+        try {
+          const path = new URL(url).pathname;
+          return path.replace('/sell-old-mobile-phone/', '');
+        } catch {
+          return url;
+        }
+      };
+
+      const hasDuplicate = (url, index) => {
+        return parsedUrls.value.indexOf(url) !== index;
+      };
+
+      const insertExampleUrl = () => {
+        const example = 'https://www.cashify.in/sell-old-mobile-phone/used-Samsung-Galaxy-s9-plus';
+        if (!urlsText.value.includes(example)) {
+          urlsText.value = (urlsText.value ? urlsText.value + '\n' : '') + example;
+        }
+      };
+
+      const connectWebSocket = () => {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        
+        ws = new WebSocket(wsUrl);
+
+        ws.onopen = () => {
+          wsConnected.value = true;
+        };
+
+        ws.onclose = () => {
+          wsConnected.value = false;
+          setTimeout(connectWebSocket, 3000);
+        };
+
+        ws.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'init') {
+              isRunning.value = data.is_running;
+              if (data.recent_logs && data.recent_logs.length > 0) {
+                logs.value = [...data.recent_logs];
+              }
+            } else if (data.type === 'log') {
+              logs.value.push(data.text);
+              if (autoScroll.value) {
+                nextTick(() => {
+                  if (terminalContainer.value) {
+                    terminalContainer.value.scrollTop = terminalContainer.value.scrollHeight;
+                  }
+                });
+              }
+            } else if (data.type === 'status') {
+              isRunning.value = data.is_running;
+              if (data.event === 'finish') {
+                fetchRuns();
+              }
+            }
+          } catch (e) {
+            console.error('WS Parse error', e);
+          }
+        };
+      };
+
+      const startAutomation = async () => {
+        startError.value = '';
+        if (parsedUrls.value.length === 0) {
+          startError.value = 'Please provide at least one valid Cashify URL.';
+          return;
+        }
+
+        try {
+          const res = await fetch('/api/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              urls: parsedUrls.value,
+              timeout: config.value.timeout,
+              retries: config.value.retries,
+              profile: config.value.profile
+            })
+          });
+          const json = await res.json();
+          if (!res.ok) {
+            startError.value = json.detail || 'Failed to start execution';
+          } else {
+            isRunning.value = true;
+          }
+        } catch (err) {
+          startError.value = 'Network error starting automation: ' + err.message;
+        }
+      };
+
+      const stopAutomation = async () => {
+        try {
+          await fetch('/api/stop', { method: 'POST' });
+        } catch (err) {
+          console.error(err);
+        }
+      };
+
+      const clearLogs = () => {
+        logs.value = [];
+      };
+
+      const getLogClass = (log) => {
+        if (log.includes('STOPPED') || log.includes('error') || log.includes('Error')) return 'text-red-400 font-semibold';
+        if (log.includes('>>> [SYSTEM]')) return 'text-cyan-400 font-semibold';
+        if (log.includes('done') || log.includes('verified')) return 'text-emerald-400';
+        if (log.includes('Base Price') || log.includes('Total Amount')) return 'text-amber-300';
+        return 'text-slate-300';
+      };
+
+      const fetchRuns = async () => {
+        loadingRuns.value = true;
+        try {
+          const res = await fetch('/api/runs');
+          runs.value = await res.json();
+        } catch (e) {
+          console.error(e);
+        } finally {
+          loadingRuns.value = false;
+        }
+      };
+
+      const formatRunName = (name) => {
+        return name
+          .replace('used-', '')
+          .replace(/-/g, ' ')
+          .replace(/\b\w/g, l => l.toUpperCase());
+      };
+
+      const formatSize = (bytes) => {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+      };
+
+      const viewRunDetail = async (runName) => {
+        try {
+          const res = await fetch(`/api/runs/${runName}`);
+          selectedRunDetail.value = await res.json();
+          nextTick(() => lucide.createIcons());
+        } catch (e) {
+          alert('Failed to load details: ' + e.message);
+        }
+      };
+
+      const loadRules = async () => {
+        try {
+          const res = await fetch('/api/rules');
+          const data = await res.json();
+          rulesJsonText.value = JSON.stringify(data, null, 2);
+        } catch (e) {
+          console.error(e);
+        }
+      };
+
+      const saveRules = async () => {
+        rulesMsg.value = null;
+        savingRules.value = true;
+        try {
+          const parsed = JSON.parse(rulesJsonText.value);
+          const res = await fetch('/api/rules', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: parsed })
+          });
+          if (res.ok) {
+            rulesMsg.value = { error: false, text: 'Rules successfully saved!' };
+          } else {
+            const err = await res.json();
+            rulesMsg.value = { error: true, text: err.detail || 'Failed to save rules.' };
+          }
+        } catch (e) {
+          rulesMsg.value = { error: true, text: 'Invalid JSON format: ' + e.message };
+        } finally {
+          savingRules.value = false;
+        }
+      };
+
+      onMounted(() => {
+        connectWebSocket();
+        fetchRuns();
+        loadRules();
+        nextTick(() => {
+          lucide.createIcons();
+        });
+      });
+
+      return {
+        activeTab,
+        tabs,
+        urlsText,
+        parsedUrls,
+        showAdvanced,
+        config,
+        isRunning,
+        wsConnected,
+        autoScroll,
+        logs,
+        terminalContainer,
+        startError,
+        cleanSlug,
+        hasDuplicate,
+        insertExampleUrl,
+        startAutomation,
+        stopAutomation,
+        clearLogs,
+        getLogClass,
+        runs,
+        loadingRuns,
+        selectedRunDetail,
+        fetchRuns,
+        formatRunName,
+        formatSize,
+        viewRunDetail,
+        rulesJsonText,
+        savingRules,
+        rulesMsg,
+        saveRules
+      };
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>
