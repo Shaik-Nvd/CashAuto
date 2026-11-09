@@ -1,0 +1,33 @@
+
+# Python virtual environment
+.venv/
+venv/
+
+# Cashify browser session
+.cashify-browser/
+
+# Automation results
+runs/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE files
+.vscode/
+.idea/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Playwright test artifacts
+playwright-report/
+test-results/

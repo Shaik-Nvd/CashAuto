@@ -1,0 +1,73 @@
+{
+  "funcs": [
+    "Front Camera not working",
+    "Back Camera not working",
+    "Volume Button not working",
+    "Finger Touch not working",
+    "WiFi not working",
+    "Battery Faulty",
+    "Speaker Faulty",
+    "Power Button not working",
+    "Charging Port not working",
+    "Face Sensor not working",
+    "Silent Button not working",
+    "Audio Receiver not working",
+    "Camera Glass Broken",
+    "Bluetooth not working",
+    "Vibrator is not working",
+    "Microphone not working",
+    "Proximity Sensor not working"
+  ],
+  "groups": [
+    "Broken/scratch on device screen",
+    "Dead Spot/Visible line and Discoloration on screen",
+    "Scratch/Dent on device body",
+    "Device panel missing/broken"
+  ],
+  "ages": [
+    "Below 3 months",
+    "3 months - 6 months",
+    "6 months - 11 months",
+    "Above 11 months"
+  ],
+  "sets": [
+    [
+      "Screen cracked/ glass broken",
+      "Chipped/cracked outside display area",
+      "More than 2 scratches on screen",
+      "1-2 scratches on screen"
+    ],
+    [
+      "Large/ heavy visible spots on screen",
+      "3 or more minor spots on screen",
+      "1-2 minor spots on screen",
+      "No spots on screen",
+      "Visible line(s) on display",
+      "Display faded along edges",
+      "No line(s) on Display",
+      "Major Discoloration",
+      "Minor Discoloration",
+      "No Discoloration"
+    ],
+    [
+      "More than 2 scratches",
+      "1-2 scratches",
+      "No scratches",
+      "Major dent(s) or more than 2",
+      "1-2 minor dents",
+      "No dents"
+    ],
+    [
+      "Cracked/ broken side or back panel",
+      "Missing side or back panel",
+      "No defect on side or back panel",
+      "Bent/ curved panel",
+      "Loose screen (Gap in screen and body)",
+      "Phone not bent"
+    ]
+  ],
+  "accs": [
+    "Original Charger of Device",
+    "Original Box with same IMEI"
+  ]
+}

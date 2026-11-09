@@ -1,0 +1,15 @@
+{
+  "card_selector": "#calcDrawerLeft .cursor-pointer.border",
+  "branches": {
+    "Scratch/Dent on device body": [
+      {
+        "options": ["More than 2 scratches", "1-2 scratches", "No scratches"],
+        "healthy": "No scratches"
+      },
+      {
+        "options": ["Major dent(s) or more than 2", "1-2 minor dents", "No dents"],
+        "healthy": "No dents"
+      }
+    ]
+  }
+}
