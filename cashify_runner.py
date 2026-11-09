@@ -237,6 +237,8 @@ class UI:
         return options
 
     async def run_case(self, variant, schema, case, discover=False):
+        print(f"  Testing case: {case.get('label', case.get('id', 'unknown'))}", flush=True)
+        print(f"    [Browser] Navigating to start questionnaire: {variant['start']}", flush=True)
         await self.page.goto(variant['start'], wait_until='domcontentloaded')
         s = await self.wait({'initial'})
         if variant['model'] not in s['text']:
@@ -255,12 +257,14 @@ class UI:
         initial['responses'] = [dict(question=q, answer='No' if case.get('initial_no')==i else 'Yes')
                                 for i,q in enumerate(questions)]
         answer_log.append(dict(stage='initial', **initial))
+        print("    [Browser] Submitting initial questions...", flush=True)
         await self.cont()
         s = await self.wait({'groups'})
         if discover: self.learn(schema, 'groups', [x['label'] for x in s['cards']])
         group = case.get('group')
         selected = [] if group is None else [schema['groups'].index(group)]
         answer_log.append(dict(stage='groups', **await self.choose(schema['groups'], selected, s)))
+        print(f"    [Browser] Selected physical group: {group or 'None'}", flush=True)
         await self.cont()
         if group is not None:
             s = await self.wait({'branch'})
@@ -275,16 +279,19 @@ class UI:
                 desired = case['branch']
             answer_log.append(dict(stage='branch', group=group,
                                    **await self.choose(branch['options'], [branch['options'].index(x) for x in desired], s)))
+            print(f"    [Browser] Selected branch options: {desired}", flush=True)
             await self.cont()
         s = await self.wait({'functional'}, schema.get('functional'))
         functional = self.functional_options(schema, [x['label'] for x in s['cards']], case, discover)
         desired = [] if not case.get('functional') else [functional.index(case['functional'])]
         answer_log.append(dict(stage='functional', **await self.choose(functional, desired, s)))
+        print(f"    [Browser] Functional defect selected: {case.get('functional') or 'None'}", flush=True)
         await self.cont()
         s = await self.wait({'accessories'})
         if discover: self.learn(schema, 'accessories', [x['label'] for x in s['cards']])
         desired = [i for i,x in enumerate(schema['accessories']) if x not in case.get('missing',[])]
         answer_log.append(dict(stage='accessories', **await self.choose(schema['accessories'], desired, s)))
+        print(f"    [Browser] Accessories state processed (missing: {case.get('missing', [])})", flush=True)
         await self.cont()
         s = await self.wait({'age','quote'})
         if self.kind(s) == 'age':
@@ -295,6 +302,7 @@ class UI:
             wanted = case.get('age', ages[0])
             # These cards submit immediately on click; verify exact labels before the one click.
             index = ages.index(wanted)
+            print(f"    [Browser] Selecting age band: {wanted}", flush=True)
             await self.page.locator(self.rules.get('card_selector',CARDS)).nth(s['cards'][index]['index']).click()
             answer_log.append(dict(stage='age', options=ages, selected=[wanted], verified=True,
                                    verification='Exact observed card clicked; quote transition verified.'))
@@ -334,20 +342,28 @@ async def variants(page, url, timeout):
 async def calculator(page, variant_url, timeout):
     print(f"Transitioning variant to calculator: {variant_url}", flush=True)
     await page.goto(variant_url, wait_until='domcontentloaded')
-    await page.get_by_role('button',name='Get Exact Value',exact=True).click()
+    button = page.get_by_role('button', name='Get Exact Value', exact=True)
+    if await button.count():
+        await button.click()
+    
+    # Check if a login or mobile number prompt appears
     try:
-        await page.wait_for_url('**/sell/calculator/**',timeout=timeout*1000)
+        await page.wait_for_url('**/sell/calculator/**', timeout=8000)
     except Exception:
         text = await page.locator('body').inner_text()
-        if re.search(r'otp|mobile number|log.?in', text,re.I):
-            print("Notice: Cashify login / OTP modal detected.", flush=True)
-            if os.environ.get("HEADLESS", "false").lower() in ("true", "1", "yes"):
-                raise ReviewRequired("Cashify sign-in required (OTP/Phone modal appeared). Login must be performed in interactive mode.")
-            await asyncio.to_thread(input,'Complete Cashify sign-in in the opened browser, then press Enter here: ')
-            button=page.get_by_role('button',name='Get Exact Value',exact=True)
-            if await button.count(): await button.click()
-            await page.wait_for_url('**/sell/calculator/**',timeout=timeout*1000)
-        else: raise
+        if re.search(r'otp|mobile number|log.?in|enter mobile', text, re.I):
+            print("\n" + "="*70, flush=True)
+            print(">>> ACTION REQUIRED: Cashify Mobile & OTP Login Prompt Detected!", flush=True)
+            print(">>> Please type your mobile number and OTP directly in the browser.", flush=True)
+            print(">>> Waiting for login completion...", flush=True)
+            print("="*70 + "\n", flush=True)
+            
+            # Wait up to 300 seconds for user to enter number and OTP and reach calculator
+            await page.wait_for_url('**/sell/calculator/**', timeout=300000)
+            print(">>> Login successful! Continuing automated inspection...", flush=True)
+        else:
+            await page.wait_for_url('**/sell/calculator/**', timeout=timeout*1000)
+            
     model = parse_qs(urlparse(page.url).query).get('pn',[None])[0]
     if not model: raise ReviewRequired('Calculator URL has no explicit model/variant identity.')
     print(f"Successfully loaded calculator for model: {model}", flush=True)

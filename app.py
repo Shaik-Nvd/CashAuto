@@ -142,6 +142,15 @@ async def run_subprocess(urls: List[str], timeout: int, retries: int, profile: s
                 break
             decoded = line.decode('utf-8', errors='replace')
             manager.log(decoded)
+            
+            # Detect Action Required / OTP prompt
+            if "ACTION REQUIRED: Cashify Mobile" in decoded or "login / OTP" in decoded:
+                await manager.broadcast({
+                    "type": "login_prompt",
+                    "title": "Cashify Phone / OTP Login Required",
+                    "message": "Cashify is requesting your mobile number and OTP in the browser. Please enter your mobile number and submit the OTP to proceed."
+                })
+                
             await manager.broadcast({"type": "log", "text": decoded})
 
         await proc.wait()
