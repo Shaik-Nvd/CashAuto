@@ -183,6 +183,16 @@
                   <input type="number" v-model.number="config.retries" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200">
                 </div>
               </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="text-slate-400 block mb-1">Delay Between Devices (s)</label>
+                  <input type="number" v-model.number="config.delay" step="0.5" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200">
+                </div>
+                <div>
+                  <label class="text-slate-400 block mb-1">Recycle Browser Every N Devices</label>
+                  <input type="number" v-model.number="config.recycle_every" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200">
+                </div>
+              </div>
               <div>
                 <label class="text-slate-400 block mb-1">Browser Profile Directory</label>
                 <input type="text" v-model="config.profile" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 text-slate-200 font-mono text-[11px]">
@@ -298,12 +308,30 @@
           <h2 class="text-base font-semibold text-slate-100">Audit Reports & Generated Runs</h2>
           <p class="text-xs text-slate-400">All completed and in-progress inspection runs saved under <code class="text-emerald-400">runs/</code></p>
         </div>
-        <button 
-          @click="fetchRuns" 
-          class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition font-medium"
-        >
-          <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="{'animate-spin': loadingRuns}"></i> Refresh
-        </button>
+        <div class="flex items-center gap-2">
+          <div v-if="batchReport && batchReport.has_report" class="flex items-center gap-1.5">
+            <a 
+              href="/api/download/__batch__/Batch_Report.csv" 
+              download
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border border-emerald-500/30 text-xs transition font-medium"
+            >
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i> Batch CSV
+            </a>
+            <a 
+              href="/api/download/__batch__/Batch_Report.txt" 
+              download
+              class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition font-medium border border-slate-700"
+            >
+              <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Batch Summary
+            </a>
+          </div>
+          <button 
+            @click="fetchRuns" 
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 transition font-medium border border-slate-700"
+          >
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5" :class="{'animate-spin': loadingRuns}"></i> Refresh
+          </button>
+        </div>
       </div>
 
       <!-- Runs Table -->
@@ -537,10 +565,13 @@
       const config = ref({
         timeout: 60,
         retries: 1,
-        profile: '.cashify-browser'
+        profile: '.cashify-browser',
+        delay: 5,
+        recycle_every: 8
       });
 
       const runs = ref([]);
+      const batchReport = ref(null);
       const loadingRuns = ref(false);
       const selectedRunDetail = ref(null);
       const loginPrompt = ref(null);
@@ -664,7 +695,9 @@
               urls: parsedUrls.value,
               timeout: config.value.timeout,
               retries: config.value.retries,
-              profile: config.value.profile
+              profile: config.value.profile,
+              delay: config.value.delay,
+              recycle_every: config.value.recycle_every
             })
           });
           const json = await res.json();
@@ -701,8 +734,14 @@
       const fetchRuns = async () => {
         loadingRuns.value = true;
         try {
-          const res = await fetch('/api/runs');
-          runs.value = await res.json();
+          const [runsRes, batchRes] = await Promise.all([
+            fetch('/api/runs'),
+            fetch('/api/batch-report')
+          ]);
+          runs.value = await runsRes.json();
+          if (batchRes.ok) {
+            batchReport.value = await batchRes.json();
+          }
         } catch (e) {
           console.error(e);
         } finally {
@@ -798,6 +837,7 @@
         clearLogs,
         getLogClass,
         runs,
+        batchReport,
         loadingRuns,
         selectedRunDetail,
         loginPrompt,

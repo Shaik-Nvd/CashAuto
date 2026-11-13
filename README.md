@@ -1,5 +1,157 @@
 # Cashify device quote automation
 
+## Version 1.4.1: a URL file doesn't have to be a clean list anymore
+
+If a `.txt` file (or a single pasted line) has other text around a URL — most commonly a
+numbered item copied straight from this script's own confirmation screen
+(`12. https://www.cashify.in/...`), but also headers like `27 URL(s) queued:` or even a
+stray `Run all 27? [Y/n] Y` line that ended up in the file by accident — the URL is now
+pulled out of the noise automatically, and a line with no URL in it at all is silently
+dropped instead of being queued as something that could only ever fail:
+
+```text
+Paste the (1) Cashify device URL: C:\Users\you\Desktop\process88.txt
+  (2 line(s) in process88.txt had no URL in them and were ignored.)
+  Loaded 3 URL(s) from process88.txt (3 queued so far).
+```
+
+This applies everywhere a URL comes from: `--urls-file`, dropping a file at the
+interactive prompt, a single line pasted directly, and URLs given on the command line.
+
+## Version 1.4.0: pace a long batch out instead of hammering the browser/site non-stop
+
+Long batches (20+ devices, each one 50-150+ page interactions) were showing two related
+symptoms: the browser itself crashing on almost every device (`Failed to open a new tab`,
+`Target page, context or browser has been closed`) from running one unbroken Chromium
+session for hours, and — separately — every device after the first one or two failing at
+the exact same final step with zero recognizable page content (`Page did not stabilize at
+quote. Observed options: []`), which is the signature of Cashify's own rate-limiting or
+bot-detection responding to a sustained burst of automated requests from one session.
+
+Two new options pace things out instead of firing requests as fast as possible:
+
+- **`--delay SECONDS`** (default **5**) — a real pause between devices. `--delay 0` to
+  disable.
+- **`--recycle-every N`** (default **8**) — proactively closes and relaunches the browser
+  every N devices even when nothing has crashed, instead of only reacting to a crash after
+  it already happened, since a long-lived session is what accumulates the memory/handle
+  pressure behind those crashes in the first place. `--recycle-every 0` to disable.
+
+```bash
+.venv/bin/python cashify_runner.py --urls-file devices.txt --delay 8 --recycle-every 5
+```
+
+This can reduce the browser-crash half of the problem, but it **cannot** and does not try
+to get past Cashify's own throttling if that's what's actually happening — if the site
+itself has started blocking a session, pacing requests out (and running smaller batches,
+with real breaks between them) is the legitimate fix; there is no flag here, and there
+won't be one, that tries to disguise automated traffic or evade a site's own rate-limiting.
+If a batch keeps failing at the exact same step across runs, that's the strongest sign it's
+the site, not the script — wait before trying again rather than retrying immediately.
+
+## Version 1.3.0: a batch report, even if you abort the run partway through
+
+After every device — and the moment the batch finishes, errors out, or is interrupted —
+a report is written to `runs/Batch_Report.txt` (human-readable), `runs/Batch_Report.csv`,
+and `runs/Batch_Report.json` (for scripts/spreadsheets), listing **every URL you queued**
+under one of three categories:
+
+- **100% Successful** — every planned case was verified, no error.
+- **Partially Successful** — some cases were verified before it stopped (site block,
+  changed control, browser crash, you pressing Ctrl+C mid-device, etc.) — shows `X/Y cases
+  verified` plus the reason it stopped.
+- **Failed** — zero cases verified: an invalid URL, or the device never got its turn before
+  the batch ended.
+
+```text
+  1. [100% Successful] https://www.cashify.in/sell-old-mobile-phone/used-xiaomi-redmi-note-6-pro
+     12/12 cases verified
+     C:\...\runs\used-xiaomi-redmi-note-6-pro
+  2. [Partially Successful] https://www.cashify.in/sell-old-mobile-phone/used-xiaomi-mi-a2
+     5/12 cases verified — KeyboardInterrupt
+     C:\...\runs\used-xiaomi-mi-a2
+  3. [Failed] https://www.cashify.in/sell-old-mobile-phone/used-xiaomi-redmi-6
+     no cases planned yet — Not reached — the batch stopped before this device started
+     C:\...\runs\used-xiaomi-redmi-6
+----------------------------------------------------------------------
+Totals (3 device(s)): 1 fully successful, 1 partially successful, 1 failed.
+```
+
+**This is saved even if you abort the run.** The report is rebuilt and re-saved after
+every single device finishes, reading each device's own progress straight off its
+`checkpoint.json` on disk — not from memory — so:
+
+- Pressing **Ctrl+C** mid-batch: the report is written one more time, right before the
+  interrupt is allowed to stop the program, and the in-flight device's own partial
+  progress (whatever cases it had already verified) is captured correctly.
+- **Closing the terminal window** (the X button) on Windows: the OS normally kills the
+  process immediately with no chance for any cleanup code to run at all. A native
+  console-close handler is now registered specifically to catch this case and get one
+  more report write in during the brief window Windows allows before the process actually
+  exits. This is best-effort — it can't help against a hard kill from Task Manager — but it
+  catches the common "I closed the window" case.
+- Either way, since the report always rebuilds from each device's own saved `checkpoint.json`
+  rather than from in-memory progress, re-running the script later and checking
+  `runs/Batch_Report.txt` will always reflect the true state of every device, even for ones
+  that were mid-run when things stopped.
+
+## Version 1.2.0: drop a whole .txt file of URLs straight into the prompt
+
+At any numbered prompt (`Paste the (N) Cashify device URL:`), you can now paste or drag in
+the path to a `.txt` file (one URL per line, `#` comments ignored) instead of a single URL,
+and every URL in it is loaded and queued at once:
+
+```text
+Paste the (1) Cashify device URL: C:\Users\you\Downloads\Cashify_Xiaomi_84_Phone_Links.txt
+  Loaded 84 URL(s) from Cashify_Xiaomi_84_Phone_Links.txt (84 queued so far).
+Paste the (85) Cashify device URL:
+```
+
+This works by dragging the file onto the Command Prompt/terminal window (which types its
+full path for you, quotes included) or by typing/pasting the path yourself. You can keep
+going afterward — paste more individual URLs, or drop a second file — before pressing Enter
+on a blank line to see the full list and confirm. A URL that's already queued (e.g. loaded
+from two files, or pasted once and also present in a dropped file) is only kept once. This
+is the same loading logic `--urls-file` already used, just available mid-prompt too.
+
+## Version 1.1.5: tolerate a stray blank line or invisible characters in a pasted URL
+
+If you paste a URL that has a blank line above it, the terminal delivers that as its own
+separate Enter press before the real URL line arrives. Previously any blank line ended the
+batch immediately, so the real URL right after it was never read. Now a single blank line
+before you've queued anything is skipped and it just asks for `(1)` again; a second blank in
+a row with nothing queued yet is still treated as a deliberate cancel, so this can't hang
+waiting forever. Pasted lines are also cleaned of invisible characters some clipboards leave
+behind (a leading byte-order mark, zero-width spaces) in addition to ordinary and
+non-breaking spaces, across all three ways of giving it URLs (the interactive prompt,
+`--urls-file`, and URLs given directly on the command line).
+
+## Version 1.1.4: fix a Windows-only "charmap codec" crash on resumed devices
+
+If a device's output folder already had a saved `checkpoint.json` from an earlier run
+(from resuming, or from retrying after a browser crash), reading it back on Windows could
+fail with `'charmap' codec can't decode byte ...: character maps to <undefined>`. The file
+was always saved correctly as UTF-8, but reading it back left the encoding unspecified,
+which falls back to Windows' default codepage (cp1252) — and that codepage can't represent
+the ₹ symbol, em dashes, or curly quotes that Cashify's own page text contains. Both the
+checkpoint and `--rules` file reads now explicitly use UTF-8, matching how they're written.
+
+This also fixed a side effect from 1.1.3's bad-URL handling: `UnicodeDecodeError` is itself
+a subclass of `ValueError`, so the "skip malformed URLs instead of aborting the batch" fix
+was accidentally catching this unrelated crash too and misreporting it as a bad URL. URL
+format is now checked up front, before any browser work starts, so it can no longer catch
+unrelated errors that happen to also be `ValueError`s.
+
+## Version 1.1.3: one bad URL no longer aborts the whole batch
+
+Every URL used to be checked (`https://www.cashify.in/sell-old-mobile-phone/used-...`)
+**before** any device ran, so a single typo'd URL anywhere in the queue — for example
+`http://cashify.in/...` missing the `s` and the `www.` — stopped the entire batch before
+device #1 even started, even if every other URL was fine. Each URL is now checked only
+when its own turn comes up: a bad one is skipped with a clear reason and the batch
+carries on to the next queued URL, instead of wasting a browser relaunch/retry on it
+(which can't fix a malformed URL anyway) or losing the rest of the run.
+
 ## Version 1.1.2: recover from a mid-batch browser crash
 
 If the shared browser crashes or gets closed partway through a batch — for example

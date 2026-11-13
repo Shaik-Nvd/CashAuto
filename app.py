@@ -87,6 +87,8 @@ class RunRequest(BaseModel):
     retries: int = 1
     profile: str = ".cashify-browser"
     rules_path: Optional[str] = None
+    delay: float = 5.0
+    recycle_every: int = 8
 
 class RulesUpdateRequest(BaseModel):
     content: dict
@@ -125,11 +127,11 @@ async def start_run(req: RunRequest):
     manager.log_history = []
     
     # Launch async task
-    asyncio.create_task(run_subprocess(clean_urls, req.timeout, req.retries, req.profile, req.rules_path))
+    asyncio.create_task(run_subprocess(clean_urls, req.timeout, req.retries, req.profile, req.rules_path, req.delay, req.recycle_every))
     
     return {"status": "started", "queued_count": len(clean_urls)}
 
-async def run_subprocess(urls: List[str], timeout: int, retries: int, profile: str, rules_path: Optional[str]):
+async def run_subprocess(urls: List[str], timeout: int, retries: int, profile: str, rules_path: Optional[str], delay: float = 5.0, recycle_every: int = 8):
     cmd = [
         sys.executable,
         str(BASE_DIR / "cashify_runner.py"),
@@ -137,6 +139,8 @@ async def run_subprocess(urls: List[str], timeout: int, retries: int, profile: s
         "--timeout", str(timeout),
         "--retries", str(retries),
         "--profile", profile,
+        "--delay", str(delay),
+        "--recycle-every", str(recycle_every),
     ]
     if rules_path:
         cmd.extend(["--rules", rules_path])
@@ -204,6 +208,24 @@ async def stop_run():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/batch-report")
+async def get_batch_report():
+    report_json = RUNS_DIR / "Batch_Report.json"
+    report_txt = RUNS_DIR / "Batch_Report.txt"
+    report_csv = RUNS_DIR / "Batch_Report.csv"
+    
+    data = {
+        "has_report": report_json.exists(),
+        "rows": [],
+        "text": report_txt.read_text(encoding="utf-8") if report_txt.exists() else None
+    }
+    if report_json.exists():
+        try:
+            data["rows"] = json.loads(report_json.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return data
+
 @app.get("/api/runs")
 async def list_runs():
     cleanup_expired_runs()
@@ -269,7 +291,10 @@ async def get_run_detail(run_name: str):
 
 @app.get("/api/download/{run_name}/{filename}")
 async def download_run_file(run_name: str, filename: str):
-    file_path = RUNS_DIR / run_name / filename
+    if run_name == "__batch__":
+        file_path = RUNS_DIR / filename
+    else:
+        file_path = RUNS_DIR / run_name / filename
     if not file_path.exists() or not file_path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path, filename=filename)
